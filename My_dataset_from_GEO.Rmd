@@ -1,0 +1,147 @@
+---
+title: "My_dataset_from_GEO"
+author: "Anabel García Mejía"
+date: "5/28/2021"
+output: html_document
+---
+- A description of the study that generated the data:
+
+Name of the dataset: "Type I diabetes gene expression profiling" (GDS10).
+
+Organism: Mus musculus.
+
+Introduction to my dataset: Type I diabetes gene expression is a particular oligonucleotide affymetrix array derived from the NOD model mice (Non-obese diabetic mice). It is an important microarray because it is such a model for the understand of the genetic and immunological basis and also the treatment of the same T1D human gene (Pubmed: 2289339).
+
+Identifiers: This oligonucleotide affymetrix microarray has two different identifiers. The first one is the platform type (GPL24) which gives a brief description of the technology used in the study, the contributors, study and samples. The second one is the GEO identifier (GSE11) which explains the experiment, contributors, samples and study too.
+
+Characteristics of the experiment: The researchers used high density oligonucleotide arrays of Type I diabetes gene from NOD mice to test the expression levels of more than 39,000 genes and ESTs. The strains were 4 NOD-derived diabetes resistant congenic strains and 2 nondiabetic control strains. Two organs were chosen (spleen and thymus) due to the importance of T cells in the development of that gene.
+
+- Information on the experimental design used (groups, types of comparisons etc).
+
+The study of Type I diabetes gene was done by targeting 2 tissues: spleen and thymus organs of the mice. For each one of these tissues, there were performed 7 strain-tissue combinations, giving the total of 14 combinations. Finally, it was done 2 replicate experiments, making the total of 28 hybridizations (samples).
+
+The groups of the array are: NOD, Idd3, Idd5, Idd3+5, Idd9, B10.H2g7 and B10.H2g7 Idd3.
+
+
+- A design and a contrast matrix adapted to the dataset:
+
+First of all, I have download the data using the GEOquery Bioconductor package:
+
+```{r}
+if (!require(GEOquery)) {
+  BiocManager::install("GEOquery")
+}
+require(GEOquery)
+gse <- getGEO("GSE11")
+class(gse)
+names(gse)
+show(gse)
+```
+
+Then, I proceed to the design part and to get in touch with my dataset:
+
+```{r}
+esetFromGEO <- gse[[1]]
+gse[[1]]
+```
+
+
+```{r}
+colnames(pData(esetFromGEO))
+```
+
+```{r}
+pData(esetFromGEO)
+```
+To perform the following matrices, I have changed some of the names to be more easy to compute and not getting errors:
+
+```{r}
+library(stringi)
+
+pData(esetFromGEO)$title[c(4,11,18,25)]<- c("Idd3p5_S1", "Idd3p5_S2", "Idd3p5_T1", "Idd3p5_T2")
+groups <- pData(esetFromGEO)$title
+groups <- stri_replace_all_regex(groups, "_S1", "")
+groups <- stri_replace_all_regex(groups, "_S2", "")
+groups <- stri_replace_all_regex(groups, "_T1", "")
+groups <- stri_replace_all_regex(groups, "_T2", "")
+groups <- stri_replace_all_regex(groups, "B10.H2g7 Idd3", "B10.H2g7_Idd3")
+groups <- stri_replace_all_regex(groups, "Idd3+5", "Idd3plus5")
+#groups <- make.names(c("Idd3+5", "Idd3plus5"), unique = TRUE)
+groups
+
+```
+
+```{r}
+targets <- data.frame(groups)
+targets
+```
+
+Then, I continue with the design matrix of my dataset:
+
+```{r}
+design2 <- model.matrix(~ 0+targets$groups)
+colnames(design2) <- sub('+', 'plus', colnames(design2))
+colnames(design2) <- sort(unique(groups))
+rownames(design2) <- rownames(targets)
+design2
+```
+
+Next step is to create the contrast matrix:
+
+```{r}
+library("limma")
+contrast2 <- makeContrasts(NODvsIdd5 = NOD-Idd5, NODvsIdd9 = NOD-Idd9, NODvsIdd3 = NOD-Idd3, NODvsIdd3p5 = NOD-Idd3p5, NODvsB10.H2g7_Idd3 = NOD-B10.H2g7_Idd3, NODvsB10.H2g7 = NOD-B10.H2g7, Idd3vsIdd5 = Idd3-Idd5, Idd3vsIdd9 = Idd3-Idd9, Idd3vsIdd3p5 = Idd3-Idd3p5, Idd3vsB10.H2g7_Idd3 = Idd3-B10.H2g7_Idd3, Idd3vsB10.H2g7 = Idd3-B10.H2g7, levels = design2)
+
+contrast2
+
+```
+- A first analyses of the data with one or more tables of differential expressed genes.
+
+Preparing the data matrix:
+
+```{r}
+data_matrix = exprs(esetFromGEO)
+fit <- lmFit(data_matrix, design2)
+fit.main <- contrasts.fit(fit, contrast2)
+fit.main <- eBayes(fit.main)
+```
+
+Setting the data of the contrast matrix and each plot:
+
+```{r}
+topTab_NODvsIdd5 <- topTable (fit.main, number=nrow(fit.main), coef="NODvsIdd5", adjust="fdr")
+head(topTab_NODvsIdd5)
+```
+
+```{r}
+volcanoplot(fit.main, highlight=3, coef = "NODvsIdd5")
+```
+
+```{r}
+topTab_NODvsB10.H2g7_Idd3 <- topTable (fit.main, number=nrow(fit.main), coef="NODvsB10.H2g7_Idd3", adjust="fdr")
+head(topTab_NODvsB10.H2g7_Idd3)
+```
+
+```{r}
+volcanoplot(fit.main, highlight=3, coef = "NODvsB10.H2g7_Idd3")
+```
+
+```{r}
+topTab_Idd3vsIdd5 <- topTable (fit.main, number=nrow(fit.main), coef="Idd3vsIdd5", adjust="fdr")
+head(topTab_Idd3vsIdd5)
+```
+
+```{r}
+volcanoplot(fit.main, highlight=3, coef = "Idd3vsIdd5")
+```
+
+
+```{r}
+topTab_Idd3vsB10.H2g7_Idd3 <- topTable (fit.main, number=nrow(fit.main), coef="Idd3vsB10.H2g7_Idd3", adjust="fdr")
+head(topTab_Idd3vsB10.H2g7_Idd3)
+```
+
+```{r}
+volcanoplot(fit.main, highlight=3, coef = "Idd3vsB10.H2g7_Idd3")
+```
+
